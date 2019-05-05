@@ -383,7 +383,7 @@ char *xml_to_json(char *xml, int indent){
 
         // Value
         new_value_part = 0;
-        while( xml[i+j] && xml[i+j]!='<' ){
+        while( xml[i] && xml[i]!='<' ){
           if( !new_value->first_value_part ){
             new_value_part = (value_part)MALLOC(sizeof(struct value_part));
             new_value_part->next_value_part = 0; 
@@ -393,7 +393,7 @@ char *xml_to_json(char *xml, int indent){
             new_value_part = new_value_part->next_value_part;
             new_value_part->next_value_part = 0;
           }
-          new_value_part = get_value_parts(&i, j, xml, new_value_part, 0);
+          new_value_part = get_value_parts(&i, 0, xml, new_value_part, 0);
           j = 0;
         }
         
@@ -633,13 +633,13 @@ char *xml_to_json(char *xml, int indent){
 //
 static void html_code_to_str(int *i, value_part value_part, const char *xml){
   // find end of html code
-  int start = *i+2;
+  int start = *i+1;
   int len = 0;
   while( xml[start+len]!=';' )
     len++;
 
   // advance through xml
-  *i += 3+len;
+  *i += 2+len;
   
   // str to int
   int m = 1; // multiplier 1, 10, 100 etc.
@@ -712,21 +712,23 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
     new_value_part->free = 0;
   }
   
-  if( memcmp("&amp;", &xml[*i], 5) == 0 ){
-    new_value_part->nVal = 1;
-    new_value_part->val = "&";
-    *i += 5;
-  }else if( memcmp("&gt;", &xml[*i], 4) == 0 ){
-    new_value_part->nVal = 1;
-    new_value_part->val = ">";
-    *i += 4;
-  }else if( memcmp("&lt;", &xml[*i], 4) == 0 ){
-    new_value_part->nVal = 1;
-    new_value_part->val = "<";
-    *i += 4;
-  }else if( memcmp("&#", &xml[*i], 2) == 0 ){
-    html_code_to_str(i, new_value_part, (const char *)xml);
-
+  if( xml[*i]=='&' ){
+    *i += 1;
+    if( memcmp("amp;", &xml[*i], 4) == 0 ){
+      new_value_part->nVal = 1;
+      new_value_part->val = "&";
+      *i += 4;
+    }else if( memcmp("gt;", &xml[*i], 3) == 0 ){
+      new_value_part->nVal = 1;
+      new_value_part->val = ">";
+      *i += 3;
+    }else if( memcmp("lt;", &xml[*i], 3) == 0 ){
+      new_value_part->nVal = 1;
+      new_value_part->val = "<";
+      *i += 2;
+    }else if( memcmp("#", &xml[*i], 1) == 0 ){
+      html_code_to_str(i, new_value_part, (const char *)xml);
+    }
   }else if( xml[*i]=='\r' ){
     if( xml[*i+1]=='\n' ){
       *i += 2;
