@@ -725,7 +725,7 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
     }else if( memcmp("lt;", &xml[*i], 3) == 0 ){
       new_value_part->nVal = 1;
       new_value_part->val = "<";
-      *i += 2;
+      *i += 3;
     }else if( memcmp("#", &xml[*i], 1) == 0 ){
       html_code_to_str(i, new_value_part, (const char *)xml);
     }
