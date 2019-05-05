@@ -25,7 +25,7 @@ The input XML is not validated prior to conversion.
 
 ## Demo
 
-https://d12xwxjgzezqwx.cloudfront.net/
+[jakethaw.com/xml_to_json](https://jakethaw.com/xml_to_json)
 
 ## Compile
 
