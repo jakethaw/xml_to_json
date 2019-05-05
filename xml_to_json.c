@@ -26,6 +26,29 @@
 ** SOFTWARE.
 ** 
 *************************************************************************
+** WebAssembly  *********************************************************
+*************************************************************************
+**
+** To compile with Emscripten as a WebAssembly function:
+**
+**   emcc -Oz xml_to_json.c -o xml_to_json.js -s EXPORTED_FUNCTIONS='["_xml_to_json", "_free"]' -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["allocate", "intArrayFromString", "ALLOC_NORMAL", "UTF8ToString"]'
+**
+*************************************************************************
+**
+** Usage example: 
+**
+** var xml = allocate(intArrayFromString("<x>hello world</x>"), 'i8', ALLOC_NORMAL);
+** var indent = 2;
+**
+** var json = _xml_to_json(xml, indent);
+** console.log(UTF8ToString(json, 5000));
+**
+** _free(xml);
+** _free(json);
+**
+*************************************************************************
+** SQLite3  *************************************************************
+*************************************************************************
 **
 ** Implementation of an SQLite3 xml_to_json(X, N) function.
 ** 
@@ -40,9 +63,9 @@
 **
 ** To compile with gcc as a run-time loadable extension:
 **
-**   UNIX-like : gcc -g -O3 -fPIC -shared xml_to_json.c -o xml_to_json.so
-**   Mac       : gcc -g -O3 -fPIC -dynamiclib xml_to_json.c -o xml_to_json.dylib
-**   Windows   : gcc -g -O3 -shared xml_to_json.c -o xml_to_json.dll
+**   UNIX-like : gcc -g -O3 -fPIC -shared xml_to_json.c -o xml_to_json.so -DSQLITE
+**   Mac       : gcc -g -O3 -fPIC -dynamiclib xml_to_json.c -o xml_to_json.dylib -DSQLITE
+**   Windows   : gcc -g -O3 -shared xml_to_json.c -o xml_to_json.dll -DSQLITE
 **
 ** Add the -DDEBUG option to print debug information to stdout.
 **
@@ -58,8 +81,15 @@
 *************************************************************************
 */
 
+#ifdef SQLITE
 #include "sqlite3ext.h"
 SQLITE_EXTENSION_INIT1
+#define MALLOC sqlite3_malloc
+#define FREE sqlite3_free
+#else
+#define MALLOC malloc
+#define FREE free
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -163,8 +193,12 @@ static int print_string(char *json, int nJson, char *s, int n){
 //
 // xml_to_json
 //
+#ifdef SQLITE
 static char *xml_to_json(char *xml, int indent){
-  
+#else
+char *xml_to_json(char *xml, int indent){
+#endif
+
   element root;
   element current_node = 0;
   element new_node;
@@ -191,7 +225,7 @@ static char *xml_to_json(char *xml, int indent){
   int i, j;
   int depth = 0;
   
-  root = (element)sqlite3_malloc(sizeof(struct element));
+  root = (element)MALLOC(sizeof(struct element));
   root->parent = 0;
   root->depth = 0;
   root->first_value = 0;
@@ -213,11 +247,11 @@ static char *xml_to_json(char *xml, int indent){
     if( xml[i]=='<' && xml[i+1]!='/' ){      
       // Create node
       depth++;
-      new_node = (element)sqlite3_malloc(sizeof(struct element));
+      new_node = (element)MALLOC(sizeof(struct element));
       
       // Node name
       j = 1;
-      while( !is_space(&xml[i+j]) && !(xml[i+j]=='/' || xml[i+j]=='>') ) j++;
+      while( xml[i+j] && !is_space(&xml[i+j]) && !(xml[i+j]=='/' || xml[i+j]=='>') ) j++;
       j--;
       new_node->name = &xml[i+1];
       new_node->nName = j;
@@ -254,9 +288,9 @@ static char *xml_to_json(char *xml, int indent){
       
       // Get attributes
       while( is_space(&xml[i]) ) i++;
-      while( xml[i]!='/' && xml[i]!='?' && xml[i]!='>' ){
+      while( xml[i] && xml[i]!='/' && xml[i]!='?' && xml[i]!='>' ){
         // Create attribute
-        new_attr = (element_attribute)sqlite3_malloc(sizeof(struct element_attribute));
+        new_attr = (element_attribute)MALLOC(sizeof(struct element_attribute));
         if( !current_node->first_attr ){
           current_node->first_attr = new_attr;
         }else{
@@ -268,42 +302,57 @@ static char *xml_to_json(char *xml, int indent){
         
         // Attribute name
         j = 1;
-        while( xml[i+j]!='=' ) j++;
+        while( xml[i+j] && xml[i+j]!='=' && !is_space(&xml[i+j]) ) j++;
         current_attr->name = &xml[i];
         current_attr->nName = j;
-        i += j+2;
+        i += j;
         
-        // Attribute value
-        do{
-          if( !current_attr->first_value_part ){
-            new_value_part = (value_part)sqlite3_malloc(sizeof(struct value_part));
-            new_value_part->next_value_part = 0; 
-            current_attr->first_value_part = new_value_part;
-          }else{
-            new_value_part->next_value_part = (value_part)sqlite3_malloc(sizeof(struct value_part));
-            new_value_part = new_value_part->next_value_part;
-            new_value_part->next_value_part = 0;
-          }
+        // Ensure attribute value starts
+        while( xml[i] && (xml[i]!='"' || is_space(&xml[i])) ) i++;
+        
+        if( xml[i] ){
+          i++;
+          
+          // Ensure attribute value ends
+          j=0;
+          while( xml[i+j] && xml[i+j]!='"' ) j++;
+          
+          if( xml[i+j] ){
+            // Attribute value
+            do{
+              if( !current_attr->first_value_part ){
+                new_value_part = (value_part)MALLOC(sizeof(struct value_part));
+                new_value_part->next_value_part = 0; 
+                current_attr->first_value_part = new_value_part;
+              }else{
+                new_value_part->next_value_part = (value_part)MALLOC(sizeof(struct value_part));
+                new_value_part = new_value_part->next_value_part;
+                new_value_part->next_value_part = 0;
+              }
 
-          new_value_part = get_value_parts(&i, 0, xml, new_value_part, 1);
-        }while( xml[i] && xml[i]!='"' );
-        i++;
-        
-        while( is_space(&xml[i]) ) i++;
+              new_value_part = get_value_parts(&i, 0, xml, new_value_part, 1);
+            }while( xml[i] && xml[i]!='"' );
+            
+            if( xml[i] == '"' ){
+              i++;
+              while( is_space(&xml[i]) ) i++;
+            }
+          }
+        }
       }
       
       // Self closing element
       if( xml[i]=='/' || xml[i]=='?' ){
         current_node = current_node->parent;
         depth--;
-        while( xml[i]!='>' ) i++;
+        while( xml[i] && xml[i]!='>' ) i++;
       }
 
     // Element close tag
     }else if( xml[i]=='<' && xml[i+1]=='/' ){
       current_node = current_node->parent;
       depth--;
-      while( xml[i]!='>' ) i++;
+      while( xml[i] && xml[i]!='>' ) i++;
       
     }else{
       i++;
@@ -319,7 +368,7 @@ static char *xml_to_json(char *xml, int indent){
         while( current_value && current_value->next_value )
           current_value = current_value->next_value;
         
-        new_value = (value)sqlite3_malloc(sizeof(struct value));
+        new_value = (value)MALLOC(sizeof(struct value));
         
         // Either make the new value the first value of the element,
         // or link the new value to the previous one
@@ -336,11 +385,11 @@ static char *xml_to_json(char *xml, int indent){
         new_value_part = 0;
         while( xml[i+j] && xml[i+j]!='<' ){
           if( !new_value->first_value_part ){
-            new_value_part = (value_part)sqlite3_malloc(sizeof(struct value_part));
+            new_value_part = (value_part)MALLOC(sizeof(struct value_part));
             new_value_part->next_value_part = 0; 
             new_value->first_value_part = new_value_part;
           }else{
-            new_value_part->next_value_part = (value_part)sqlite3_malloc(sizeof(struct value_part));
+            new_value_part->next_value_part = (value_part)MALLOC(sizeof(struct value_part));
             new_value_part = new_value_part->next_value_part;
             new_value_part->next_value_part = 0;
           }
@@ -521,7 +570,7 @@ static char *xml_to_json(char *xml, int indent){
    nJson = json_output(root, NULL, indent);
    
    // Construct JSON
-   json = sqlite3_malloc(nJson+1);
+   json = MALLOC(nJson+1);
    json_output(root, json, indent);
    json[nJson] = 0;
    
@@ -538,12 +587,12 @@ static char *xml_to_json(char *xml, int indent){
        current_value_part = current_attr->first_value_part;
        while( current_value_part ){
          next_value_part = current_value_part->next_value_part;
-         sqlite3_free(current_value_part);
+         FREE(current_value_part);
          current_value_part = next_value_part;
        }
        
        next_attr = current_attr->next_attr;
-       sqlite3_free(current_attr);
+       FREE(current_attr);
        current_attr = next_attr;
      }
      
@@ -555,18 +604,18 @@ static char *xml_to_json(char *xml, int indent){
        current_value_part = current_value->first_value_part;
        while( current_value_part ){
          next_value_part = current_value_part->next_value_part;
-         if( current_value_part->free ) sqlite3_free(current_value_part->val);
-         sqlite3_free(current_value_part);
+         if( current_value_part->free ) FREE(current_value_part->val);
+         FREE(current_value_part);
          current_value_part = next_value_part;
        }
        
        next_value = current_value->next_value;
-       sqlite3_free(current_value);
+       FREE(current_value);
        current_value = next_value;
      }
      
      next_node = current_node->next;
-     sqlite3_free(current_node);
+     FREE(current_node);
      current_node = next_node;
    }
    
@@ -605,25 +654,25 @@ static void html_code_to_str(int *i, value_part value_part, const char *xml){
   char *str;
   if( x < 1 << 8 ){
     value_part->nVal = 1;
-    str = sqlite3_malloc(2);
+    str = MALLOC(2);
     str[0] = x & 0xFF;
     str[1] = 0;
   }else if( x < 1 << 16 ){
     value_part->nVal = 2;
-    str = sqlite3_malloc(3);
+    str = MALLOC(3);
     str[0] = (x >> 8) & 0xFF;
     str[1] = x & 0xFF;
     str[2] = 0;
   }else if( x < 1 << 16 ){
     value_part->nVal = 3;
-    str = sqlite3_malloc(4);
+    str = MALLOC(4);
     str[0] = (x >> 16) & 0xFF;
     str[1] = (x >> 8) & 0xFF;
     str[2] = x & 0xFF;
     str[3] = 0;
   }else{
     value_part->nVal = 4;
-    str = sqlite3_malloc(5);
+    str = MALLOC(5);
     str[0] = (x >> 24) & 0xFF;
     str[1] = (x >> 16) & 0xFF;
     str[2] = (x >> 8) & 0xFF;
@@ -657,7 +706,7 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
    || xml[*i]=='\n'
    || (xml[*i]=='"' && !is_attr)
    || xml[*i]=='\\' ){
-    new_value_part->next_value_part = (value_part)sqlite3_malloc(sizeof(struct value_part));
+    new_value_part->next_value_part = (value_part)MALLOC(sizeof(struct value_part));
     new_value_part = new_value_part->next_value_part;
     new_value_part->next_value_part = 0;
     new_value_part->free = 0;
@@ -716,7 +765,7 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
 //
 // Does not zero terminate JSON string.
 //
-static int json_output(element root, char *json, int indent){
+int json_output(element root, char *json, int indent){
   int nJson = 0;
   int depth = 0;
   
@@ -933,6 +982,7 @@ static int json_output(element root, char *json, int indent){
   return nJson;
 }
 
+#ifdef SQLITE
 /*
 ** Implementation of xml_to_json() function.
 */
@@ -975,3 +1025,4 @@ int sqlite3_xmltojson_init(
   }
   return rc;
 }
+#endif
