@@ -1,5 +1,60 @@
 # xml_to_json
 
+Implementation of `xml_to_json(xml, indent)` function.
+
+`xml_to_json(xml, indent)` takes two arguments:
+
+* xml - XML string UTF-8 encoded
+* indent - Indent for pretty printed JSON or -1 for minified JSON
+
+The input XML is not validated prior to conversion.
+
+# TOC
+
+- [WebAssembly](#webassembly)
+    - [Compile](#compile)
+    - [Usage example:](#usage-example)
+- [SQLite3](#sqlite3)
+    - [Compile](#compile-1)
+    - [Usage examples](#usage-examples)
+- [Implementation Method](#implementation-method)
+- [TODO](#todo)
+
+
+# WebAssembly
+
+## Demo
+
+https://d12xwxjgzezqwx.cloudfront.net/
+
+## Compile
+
+To compile with [Emscripten](https://emscripten.org) as a WebAssembly function:
+
+```bash
+emcc -Oz xml_to_json.c -o xml_to_json.js -s EXPORTED_FUNCTIONS='["_xml_to_json", "_free"]' -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["allocate", "intArrayFromString", "ALLOC_NORMAL", "UTF8ToString"]'
+```
+
+## Usage example: 
+
+```javascript
+var xml = allocate(intArrayFromString("<x>hello world</x>"), 'i8', ALLOC_NORMAL);
+var indent = 2;
+
+var json = _xml_to_json(xml, indent);
+console.log(UTF8ToString(json, 5000));
+
+_free(xml);
+_free(json);
+```
+```json
+{
+  "x": "hello world"
+}
+```
+
+# SQLite3
+
 Implementation of an [SQLite3](sqlite.org) `xml_to_json(X, N)` function.
 
 `xml_to_json(X, N)` takes one or two arguments:
@@ -9,15 +64,8 @@ Implementation of an [SQLite3](sqlite.org) `xml_to_json(X, N)` function.
 
 The input XML is not validated prior to conversion.
 
-# TOC
 
-- [Compile](#compile)
-- [Usage examples](#usage-examples)
-- [Implementation Method](#implementation-method)
-- [TODO](#todo)
-
-
-# Compile
+## Compile
 
 To compile with gcc as a run-time loadable extension:
 
@@ -35,7 +83,7 @@ E.g.
 gcc -g -O3 -fPIC -shared xml_to_json.c -o xml_to_json.so -DDEBUG
 ```
 
-# Usage examples
+## Usage examples
 
 ```sql
 SELECT xml_to_json('<x>hello world</x>', 2);
