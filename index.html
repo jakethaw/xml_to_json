@@ -3,9 +3,66 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>jakethaw.com</title>
+    <title>XML to JSON</title>
+    <style>
+      td {
+          vertical-align: top;
+          padding-bottom: 5px;
+      }
+    </style>
   </head>
   <body>
-    <a href="/xml_to_json">XML to JSON</a>
+    <h1>XML to JSON</h1>
+    
+    <a href="https://github.com/jakethaw/xml_to_json">github.com/jakethaw/xml_to_json</a>
+    
+    <br>
+    <br>
+    
+    <table>
+      <tr>
+        <td>Indent</td>
+        <td>
+          <select id="indent" onchange="xml_to_json()">
+            <option value="-1">Minify</option>
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2" selected="selected">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td>XML</td>
+        <td>
+          <textarea id="xml" rows="10" cols="50" oninput="xml_to_json()"><x>hello world</x></textarea>
+        </td>
+      </tr>
+      <tr>
+        <td>JSON</td>
+        <td>
+          <textarea id="json" rows="10" cols="50">{
+  "x": "hello world"
+}
+</textarea>
+        </td>
+      </tr>
+    </table>
+
+    <script async type="text/javascript" src="xml_to_json.js"></script>
+    <script>
+      function xml_to_json(){
+        var xml = allocate(intArrayFromString(document.getElementById("xml").value), 'i8', ALLOC_NORMAL);
+        var indent = document.getElementById("indent").value;
+
+        var json = _xml_to_json(xml, indent);
+
+        document.getElementById("json").value = UTF8ToString(json, 5000);
+
+        _free(xml);
+        _free(json);
+      }
+    </script>
   </body>
 </html>
