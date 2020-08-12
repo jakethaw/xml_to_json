@@ -119,10 +119,12 @@ struct value{
 
 // Divide value into parts to support special characters
 // i.e.
-//   &amp; -> &
-//   &gt;  -> >
-//   &lt;  -> <
-//   &#39; -> '
+//   &amp;  -> &
+//   &gt;   -> >
+//   &lt;   -> <
+//   &quot; -> "
+//   &apos; -> '
+//   &#39;  -> '
 //   etc.
 //
 //  Constant memory for named special charactes
@@ -726,6 +728,14 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
       new_value_part->nVal = 1;
       new_value_part->val = "<";
       *i += 3;
+    }else if( memcmp("quot;", &xml[*i], 5) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\\"";
+      *i += 5;
+    }else if( memcmp("apos;", &xml[*i], 5) == 0 ){
+      new_value_part->nVal = 1;
+      new_value_part->val = "'";
+      *i += 5;
     }else if( memcmp("#", &xml[*i], 1) == 0 ){
       html_code_to_str(i, new_value_part, (const char *)xml);
     }
