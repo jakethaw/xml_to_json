@@ -63,9 +63,9 @@
 **
 ** To compile with gcc as a run-time loadable extension:
 **
-**   UNIX-like : gcc -g -O3 -fPIC -shared xml_to_json.c -o xml_to_json.so -DSQLITE
-**   Mac       : gcc -g -O3 -fPIC -dynamiclib xml_to_json.c -o xml_to_json.dylib -DSQLITE
-**   Windows   : gcc -g -O3 -shared xml_to_json.c -o xml_to_json.dll -DSQLITE
+**   UNIX-like : gcc -g -O2 -fPIC -shared xml_to_json.c -o xml_to_json.so -DSQLITE
+**   Mac       : gcc -g -O2 -fPIC -dynamiclib xml_to_json.c -o xml_to_json.dylib -DSQLITE
+**   Windows   : gcc -g -O2 -shared xml_to_json.c -o xml_to_json.dll -DSQLITE
 **
 ** Add the -DDEBUG option to print debug information to stdout.
 **
@@ -689,8 +689,11 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
 
   while( xml[*i+j] && !(xml[*i+j]=='<'
                     || xml[*i+j]=='&'
-                    || xml[*i+j]=='\r'
+                    || xml[*i+j]=='\b'
+                    || xml[*i+j]=='\t'
                     || xml[*i+j]=='\n'
+                    || xml[*i+j]=='\f'
+                    || xml[*i+j]=='\r'
                     || xml[*i+j]=='"'
                     || xml[*i+j]=='\\') )
     j++;
@@ -704,8 +707,11 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
   
   // Special characters
   if( xml[*i]=='&'
-   || xml[*i]=='\r'
+   || xml[*i]=='\b'
+   || xml[*i]=='\t'
    || xml[*i]=='\n'
+   || xml[*i]=='\f'
+   || xml[*i]=='\r'
    || (xml[*i]=='"' && !is_attr)
    || xml[*i]=='\\' ){
     new_value_part->next_value_part = (value_part)MALLOC(sizeof(struct value_part));
@@ -736,20 +742,56 @@ static value_part get_value_parts(int *i, int j, char *xml, value_part new_value
       new_value_part->nVal = 1;
       new_value_part->val = "'";
       *i += 5;
+    }else if( memcmp("#8;", &xml[*i], 3) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\b";
+      *i += 3;
+    }else if( memcmp("#9;", &xml[*i], 3) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\t";
+      *i += 3;
+    }else if( memcmp("#10;", &xml[*i], 4) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\n";
+      *i += 4;
+    }else if( memcmp("#12;", &xml[*i], 4) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\f";
+      *i += 4;
+    }else if( memcmp("#13;", &xml[*i], 4) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\r";
+      *i += 4;
+    }else if( memcmp("#34;", &xml[*i], 4) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\\"";
+      *i += 4;
+    }else if( memcmp("#92;", &xml[*i], 4) == 0 ){
+      new_value_part->nVal = 2;
+      new_value_part->val = "\\\\";
+      *i += 4;
     }else if( memcmp("#", &xml[*i], 1) == 0 ){
       html_code_to_str(i, new_value_part, (const char *)xml);
     }
-  }else if( xml[*i]=='\r' ){
-    if( xml[*i+1]=='\n' ){
-      *i += 2;
-    }else{
-      *i += 1;
-    }
+  }else if( xml[*i]=='\b' ){
     new_value_part->nVal = 2;
-    new_value_part->val = "\\n";
+    new_value_part->val = "\\b";
+    *i += 1;
+  }else if( xml[*i]=='\t' ){
+    new_value_part->nVal = 2;
+    new_value_part->val = "\\t";
+    *i += 1;
   }else if( xml[*i]=='\n' ){
     new_value_part->nVal = 2;
     new_value_part->val = "\\n";
+    *i += 1;
+  }else if( xml[*i]=='\f' ){
+    new_value_part->nVal = 2;
+    new_value_part->val = "\\f";
+    *i += 1;
+  }else if( xml[*i]=='\r' ){
+    new_value_part->nVal = 2;
+    new_value_part->val = "\\r";
     *i += 1;
   }else if( !is_attr && xml[*i]=='"' ){
     new_value_part->nVal = 2;
