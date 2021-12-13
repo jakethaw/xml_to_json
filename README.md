@@ -70,9 +70,9 @@ The input XML is not validated prior to conversion.
 To compile with gcc as a run-time loadable extension:
 
 ```bash
-UNIX-like : gcc -g -O3 -fPIC -shared xml_to_json.c -o xml_to_json.so
-Mac       : gcc -g -O3 -fPIC -dynamiclib xml_to_json.c -o xml_to_json.dylib
-Windows   : gcc -g -O3 -shared xml_to_json.c -o xml_to_json.dll
+UNIX-like : gcc -g -O3 -fPIC -shared xml_to_json.c -o xml_to_json.so -DSQLITE
+Mac       : gcc -g -O3 -fPIC -dynamiclib xml_to_json.c -o xml_to_json.dylib -DSQLITE
+Windows   : gcc -g -O3 -shared xml_to_json.c -o xml_to_json.dll -DSQLITE
 ```
 
 Add the `-DDEBUG` option to print debug information to stdout.
